@@ -1,0 +1,19 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+
+# ---------- 运行期生成的数据 / 日志 ----------
+# it6721_mcp.py 记录 CSV 默认落盘目录（可用 IT6721_DATA_DIR 覆盖）
+it6721_recordings/
+data/
+*.csv
+*.log
+
+# ---------- 操作系统 ----------
+.DS_Store
+Thumbs.db
+
+# ---------- 本地覆盖（不入库） ----------
+*.local.json

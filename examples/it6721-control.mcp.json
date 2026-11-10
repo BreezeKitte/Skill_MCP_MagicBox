@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "it6721-control": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "C:\\Users\\<你的用户名>\\.workbuddy\\skills\\it6721-control\\scripts\\it6721_mcp.py"
+      ],
+      "env": {}
+    }
+  }
+}
