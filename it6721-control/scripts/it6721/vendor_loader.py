@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """可选依赖装载器：把 vendor/ 目录里的离线包加入 sys.path。
 
 本程序本身零第三方依赖，vendor/ 默认是空的。

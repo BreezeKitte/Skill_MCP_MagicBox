@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """本地浏览器控制台。仅用标准库 http.server，绑定 127.0.0.1，不对外暴露。
 
 界面沿用 Ardot 设计稿的深炭黑 + 单荧光绿信号色，数值使用等宽字体。

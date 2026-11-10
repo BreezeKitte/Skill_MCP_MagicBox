@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """序列引擎：上位机侧定时按步下发，不依赖设备内置 LIST 指令。"""
 
 import threading

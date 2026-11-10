@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """服务端自动微调引擎：按范围 / 步进 / 间隔自动递增、递减或往复扫描。
 
 放在服务端而不是浏览器里的原因：

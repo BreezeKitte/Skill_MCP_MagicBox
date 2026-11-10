@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """IT6721 设备层：26 字节二进制帧收发、功率校验、轮询与断线兜底。
 
 协议依据：IT6720 经济型数控系列专有 26 字节帧 + 4800 8N1。

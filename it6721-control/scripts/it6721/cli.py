@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """纯终端 REPL：无浏览器 / SSH 到 Linux 时使用。只依赖标准库。"""
 
 import sys

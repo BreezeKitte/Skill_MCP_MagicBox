@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """ITECH IT6720 / IT6721 专有 26 字节串口协议（纯标准库，无第三方依赖）。
 
 依据

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """命令终端语法解析与执行。
 
 大小写不敏感；= 号、单位后缀 V/A 可省略；; 分隔多命令。

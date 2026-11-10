@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """IT6721 真机只读诊断 v4（26 字节二进制帧版）。
 
 协议依据：《IT6720 系列编程与语法指南》V1.0 / 《IT6720 Series User's Manual》

@@ -186,3 +186,12 @@ python it6721-control/scripts/it6721_mcp.py   # 应无报错地等待 stdin；Ct
 ## 许可证
 
 [MIT](LICENSE) © 2026 BreezeKitte
+
+本仓库所有源码文件（含内嵌 `it6721/` 引擎）均在文件头带有：
+
+```text
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
+```
+
+因此源码被单独复制、分发给他人时，许可声明会随文件一起走，符合 MIT 的"在副本中保留版权与许可声明"要求。

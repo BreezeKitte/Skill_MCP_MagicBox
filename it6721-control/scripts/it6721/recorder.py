@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """CSV 数据记录：复用轮询结果写文件，不额外占用串口。"""
 
 import csv

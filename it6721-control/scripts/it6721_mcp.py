@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """IT6721 程控电源 MCP 服务（stdio，纯标准库实现）。
 
 通过 Model Context Protocol 把 IT6721 上位机能力暴露给任意支持 MCP 的客户端

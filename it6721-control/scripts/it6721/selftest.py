@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+# Copyright (c) 2026 BreezeKitte
+# SPDX-License-Identifier: MIT
 """端到端自测：全部走模拟设备，不接触真实硬件、不打开任何串口。"""
 
 import os
