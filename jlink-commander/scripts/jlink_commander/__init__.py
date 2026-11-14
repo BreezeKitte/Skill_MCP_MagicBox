@@ -19,7 +19,7 @@
 把符号交给 DWARF 解析即可直接复用。
 """
 
-__version__ = "1.0.0"
+__version__ = "1.2.0"
 
 from .core import (  # noqa: F401
     resolve_exe,
@@ -30,6 +30,18 @@ from .core import (  # noqa: F401
     build_flash_script,
     parse_mem_output,
     assemble_region,
+    build_read_memory_script,
+    build_savebin_script,
+    build_verifybin_script,
+    build_erase_script,
+    build_regs_script,
+    parse_mem_lines,
+    tokens_to_bytes,
+    assemble_region_lines,
+    parse_intel_hex,
+    build_verify_hex_script,
+    compare_hex,
+    PARSE_WIDTH,
 )
 from .dwarf import (  # noqa: F401
     resolve_globals,

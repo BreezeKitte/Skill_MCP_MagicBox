@@ -7,7 +7,10 @@
 工具分两类：
   · 不碰真机（安全）：jlink_selftest / jlink_build_script / jlink_dwarf_resolve
   · 访问真机（按需调用）：jlink_exec / jlink_flash / jlink_nohalt_sample /
-                        jlink_write_ram / jlink_read_memory
+                        jlink_write_ram / jlink_read_memory / jlink_save_memory /
+                        jlink_verify_flash / jlink_erase_flash / jlink_hw_status /
+                        jlink_read_registers
+  · 内存读写支持宽度：读 mem8/mem16/mem32（width 8/16/32）；写 w1/w2/w4/w8（width 1/2/4/8）。
 
 铁律（违反会读出假数据甚至误判固件故障，见 references/jlink_reference.md）：
   B20  connect 复位芯片 → 写 RAM 与采样必须在同一 Commander 会话（见 jlink_write_ram）。
@@ -27,6 +30,10 @@ from jlink_commander import (
     build_nohalt_sample_script, build_write_ram_script, build_flash_script,
     parse_mem_output, assemble_region, resolve_globals, member_offset,
     resolve_elf, selftest,
+    build_read_memory_script, build_savebin_script, build_verifybin_script,
+    build_erase_script, build_regs_script,
+    parse_mem_lines, assemble_region_lines, parse_intel_hex,
+    build_verify_hex_script, compare_hex, PARSE_WIDTH,
 )
 
 # --------------------------------------------------------------------------
@@ -240,43 +247,128 @@ def t_nohalt_sample(args):
 
 
 def t_write_ram(args):
-    """B20：同会话写 RAM + 读回。返回写入值与读回字节。"""
+    """B20：同会话写 RAM + 读回。width 取 1/2/4/8（默认 4=w4）。返回写入值与读回。"""
     addr = int(args["addr"], 0)
+    width = int(args.get("width", 4))
+    if width not in (1, 2, 4, 8):
+        raise ValueError("width 必须是 1/2/4/8")
     v = args["value"]
     if isinstance(v, str) and v.lower().startswith("0x"):
-        word = int(v, 16) & 0xFFFFFFFF
+        word = int(v, 16) & ((1 << (width * 8)) - 1)
     elif isinstance(v, float) or (isinstance(v, str) and "." in v):
         word = struct.unpack("<I", struct.pack("<f", float(v)))[0]
     else:
-        word = int(v) & 0xFFFFFFFF
+        word = int(v) & ((1 << (width * 8)) - 1)
     script = build_write_ram_script(addr, word, args.get("device", "S32K144"),
                                      str(args.get("iface", "1")),
-                                     int(args.get("speed", 4000)))
+                                     int(args.get("speed", 4000)),
+                                     readback_len=int(args.get("readback_len", width)),
+                                     width=width, no_halt=not args.get("halt", False))
     out = run_script(args.get("jlink_exe"), script, timeout=int(args.get("timeout", 120)))
-    rows = parse_mem_output(out)
-    block = assemble_region(rows, addr, 4)
-    readback = struct.unpack("<I", block[:4])[0] if len(block) >= 4 else None
-    return {"addr": "0x%08X" % addr, "written": "0x%08X" % word,
-            "readback": ("0x%08X" % readback) if readback is not None else None,
+    rows = parse_mem_lines(out)
+    block = assemble_region_lines(rows, addr, width, PARSE_WIDTH[width])
+    if len(block) >= width:
+        readback = int.from_bytes(block[:width], "little")
+    else:
+        readback = None
+    return {"addr": "0x%08X" % addr, "width": width, "written": "0x%0*X" % (width * 2, word),
+            "readback": ("0x%0*X" % (width * 2, readback)) if readback is not None else None,
             "match": readback == word, "output": out}
 
 
 def t_read_memory(args):
-    """单次读内存。no_halt=True（默认）时经 AHB-AP 在核运行时读取，不冻结内核。"""
+    """单次读内存。width 取 8/16/32（默认 8=字节）。no_halt 默认 True（核运行时不冻结）。"""
     addr = int(args["addr"], 0)
     length = int(args.get("length", 4))
-    no_halt = not args.get("halt", False)
-    suffix = " NoHalt" if no_halt else ""
+    width = int(args.get("width", 8))
+    if width not in (8, 16, 32):
+        raise ValueError("width 必须是 8/16/32")
+    script = build_read_memory_script(addr, length, width,
+                                      no_halt=not args.get("halt", False),
+                                      device=args.get("device", "S32K144"),
+                                      iface=str(args.get("iface", "1")),
+                                      speed=int(args.get("speed", 4000)))
+    if args.get("dry"):
+        return {"script": script}
+    out = run_script(args.get("jlink_exe"), script, timeout=int(args.get("timeout", 120)))
+    rows = parse_mem_lines(out)
+    block = assemble_region_lines(rows, addr, length, width)
+    return {"addr": "0x%08X" % addr, "length": length, "width": width,
+            "bytes_hex": block.hex(), "output": out}
+
+
+def t_save_memory(args):
+    """savebin：把目标内存区间存成 .bin 文件（离线分析 / Flash 备份）。"""
+    addr = int(args["addr"], 0)
+    length = int(args["length"])
+    out_path = args["out_path"]
+    script = build_savebin_script(addr, length, out_path,
+                                  args.get("device", "S32K144"),
+                                  str(args.get("iface", "1")),
+                                  int(args.get("speed", 4000)))
+    out = run_script(args.get("jlink_exe"), script, timeout=int(args.get("timeout", 120)))
+    return {"addr": "0x%08X" % addr, "length": length, "out_path": out_path,
+            "file_exists": os.path.isfile(out_path), "output": out}
+
+
+def t_verify_flash(args):
+    """R6 读回校验。.bin → verifybin；.hex → 解析后逐记录回读比对。"""
+    fpath = args["file"]
+    device = args.get("device", "S32K144")
+    iface = str(args.get("iface", "1"))
+    speed = int(args.get("speed", 4000))
+    if fpath.lower().endswith(".bin"):
+        addr = int(args.get("addr", "0"), 0)
+        script = build_verifybin_script(fpath, addr, device, iface, speed)
+        out = run_script(args.get("jlink_exe"), script, timeout=int(args.get("timeout", 120)))
+        ok = "Verify OK" in out or "O.K." in out
+        return {"file": fpath, "addr": "0x%08X" % addr, "verify_ok": ok, "output": out}
+    elif fpath.lower().endswith((".hex", ".ihx")):
+        records = parse_intel_hex(fpath)
+        script = build_verify_hex_script(records, device, iface, speed)
+        out = run_script(args.get("jlink_exe"), script, timeout=int(args.get("timeout", 600)))
+        results = compare_hex(out, records)
+        all_ok = all(r["match"] for r in results)
+        return {"file": fpath, "records": len(results), "all_match": all_ok,
+                "results": results, "output": out}
+    else:
+        raise ValueError("仅支持 .bin 或 .hex 校验")
+
+
+def t_erase_flash(args):
+    """erase：擦除 Flash。不传 addr/length=整片擦除；否则区间擦除。"""
+    addr = int(args["addr"], 0) if args.get("addr") is not None else None
+    length = int(args["length"]) if args.get("length") is not None else None
+    if (addr is None) != (length is None):
+        raise ValueError("addr 与 length 必须同时提供或同时省略")
+    script = build_erase_script(addr, length, args.get("device", "S32K144"),
+                                str(args.get("iface", "1")),
+                                int(args.get("speed", 4000)))
+    out = run_script(args.get("jlink_exe"), script, timeout=int(args.get("timeout", 300)))
+    return {"addr": ("0x%08X" % addr) if addr is not None else None,
+            "length": length, "output": out}
+
+
+def t_hw_status(args):
+    """ShowHWStatus：读 J-Link 硬件状态，重点是 VTref（目标供电电压）与 ITarget。
+    无需目标板供电即可运行（probe 在 USB 上即可），适合台架动作前的电源预检。"""
     lines = build_connect_lines(args.get("device", "S32K144"),
                                 str(args.get("iface", "1")),
                                 int(args.get("speed", 4000)))
-    lines += ["g", "Sleep 100", f"mem 0x{addr:08X},{length}{suffix}", "g", "q"]
+    lines += ["ShowHWStatus", "q"]
     out = run_script(args.get("jlink_exe"), "\n".join(lines) + "\n",
-                     timeout=int(args.get("timeout", 120)))
-    rows = parse_mem_output(out)
-    block = assemble_region(rows, addr, length)
-    return {"addr": "0x%08X" % addr, "length": length,
-            "bytes_hex": block.hex(), "output": out}
+                     timeout=int(args.get("timeout", 60)))
+    return {"output": out}
+
+
+def t_read_registers(args):
+    """regs：显示 CPU 寄存器。注意 regs 会隐式 halt 内核，仅用于固件已停（故障/断点后）
+    或可接受短暂冻结的场景，勿在 ISR 活跃时用于稳态观测（见 B22）。"""
+    script = build_regs_script(args.get("device", "S32K144"),
+                               str(args.get("iface", "1")),
+                               int(args.get("speed", 4000)))
+    out = run_script(args.get("jlink_exe"), script, timeout=int(args.get("timeout", 60)))
+    return {"output": out}
 
 
 # --------------------------------------------------------------------------
@@ -333,17 +425,53 @@ TOOLS = [
          "outdir": {"type": "string"}, "halt": {"type": "boolean", "description": "true=改用 halt 模式（危险，电机 ISR 活跃时勿用）"},
          "dry": {"type": "boolean", "description": "只返回脚本不执行"}, "timeout": {"type": "integer"}}}},
     {"name": "jlink_write_ram",
-     "description": "B20：同一会话内写 32-bit RAM 字并读回校验（connect→g→w4→mem→q）。解决 connect 复位冲掉独立 w4 的问题。碰真机。",
+     "description": "B20：同一会话内写 RAM 字并读回校验（connect→g→wN→mem→q）。width 取 1/2/4/8（默认 4=w4），解决 connect 复位冲掉独立写入的问题。碰真机。",
      "inputSchema": {"type": "object", "properties": {
          "addr": {"type": "string", "description": "32 位地址，0x..."},
          "value": {"type": "string", "description": "0x 十六进制或浮点（按 IEEE754 打包成字）"},
+         "width": {"type": "integer", "enum": [1, 2, 4, 8], "description": "写位宽：1/2/4/8 对应 w1/w2/w4/w8"},
+         "readback_len": {"type": "integer", "description": "读回字节数（默认=width）"},
+         "halt": {"type": "boolean", "description": "true=halt 后写读（危险）"},
          "device": {"type": "string"}, "iface": {"type": "string"}, "speed": {"type": "integer"},
          "jlink_exe": {"type": "string"}, "timeout": {"type": "integer"}}}},
     {"name": "jlink_read_memory",
-     "description": "单次读内存，默认 NoHalt（核运行时不冻结）。碰真机。",
+     "description": "单次读内存，默认 NoHalt（核运行时不冻结）。width 取 8/16/32（默认 8=字节；16=mem16 半字；32=mem32 字）。碰真机。",
      "inputSchema": {"type": "object", "properties": {
          "addr": {"type": "string"}, "length": {"type": "integer", "description": "字节数"},
+         "width": {"type": "integer", "enum": [8, 16, 32], "description": "读位宽：8/16/32"},
          "halt": {"type": "boolean", "description": "true=halt 后读（危险）"},
+         "dry": {"type": "boolean", "description": "只返回脚本不执行"},
+         "device": {"type": "string"}, "iface": {"type": "string"}, "speed": {"type": "integer"},
+         "jlink_exe": {"type": "string"}, "timeout": {"type": "integer"}}}},
+    {"name": "jlink_save_memory",
+     "description": "savebin：把目标内存区间存成 .bin 文件（离线分析 / Flash 备份）。语法 SaveBin <file>,<addr>,<NumBytes>。碰真机。",
+     "inputSchema": {"type": "object", "properties": {
+         "addr": {"type": "string"}, "length": {"type": "integer", "description": "字节数"},
+         "out_path": {"type": "string", "description": "输出 .bin 路径"},
+         "device": {"type": "string"}, "iface": {"type": "string"}, "speed": {"type": "integer"},
+         "jlink_exe": {"type": "string"}, "timeout": {"type": "integer"}}}},
+    {"name": "jlink_verify_flash",
+     "description": "R6 读回校验：.bin 用 verifybin 校验；.hex 解析后逐记录回读比对（all_match）。烧录后必做。碰真机。",
+     "inputSchema": {"type": "object", "properties": {
+         "file": {"type": "string", "description": ".bin 或 .hex 文件路径"},
+         "addr": {"type": "string", "description": ".bin 校验起始地址（默认 0）"},
+         "device": {"type": "string"}, "iface": {"type": "string"}, "speed": {"type": "integer"},
+         "jlink_exe": {"type": "string"}, "timeout": {"type": "integer"}}}},
+    {"name": "jlink_erase_flash",
+     "description": "erase：擦除 Flash。addr 与 length 同时省略=整片擦除；同时提供=区间擦除（Erase <SAddr>,<EAddr>）。碰真机。",
+     "inputSchema": {"type": "object", "properties": {
+         "addr": {"type": "string", "description": "起始地址（与 length 配对）"},
+         "length": {"type": "integer", "description": "字节数（与 addr 配对）"},
+         "device": {"type": "string"}, "iface": {"type": "string"}, "speed": {"type": "integer"},
+         "jlink_exe": {"type": "string"}, "timeout": {"type": "integer"}}}},
+    {"name": "jlink_hw_status",
+     "description": "ShowHWStatus：读 J-Link 硬件状态，重点是 VTref（目标供电电压）与 ITarget。无需目标板供电（probe 在 USB 即可），适合台架动作前电源预检。碰真机（仅 probe）。",
+     "inputSchema": {"type": "object", "properties": {
+         "device": {"type": "string"}, "iface": {"type": "string"},
+         "jlink_exe": {"type": "string"}, "timeout": {"type": "integer"}}}},
+    {"name": "jlink_read_registers",
+     "description": "regs：显示 CPU 寄存器（R0-R15/xPSR/MSP/PSP/LR/PC）。注意会隐式 halt 内核，仅用于固件已停（故障/断点后）或可接受短暂冻结时，勿在 ISR 活跃稳态观测用（见 B22）。碰真机。",
+     "inputSchema": {"type": "object", "properties": {
          "device": {"type": "string"}, "iface": {"type": "string"}, "speed": {"type": "integer"},
          "jlink_exe": {"type": "string"}, "timeout": {"type": "integer"}}}},
 ]
@@ -357,6 +485,11 @@ DISPATCH = {
     "jlink_nohalt_sample": t_nohalt_sample,
     "jlink_write_ram": t_write_ram,
     "jlink_read_memory": t_read_memory,
+    "jlink_save_memory": t_save_memory,
+    "jlink_verify_flash": t_verify_flash,
+    "jlink_erase_flash": t_erase_flash,
+    "jlink_hw_status": t_hw_status,
+    "jlink_read_registers": t_read_registers,
 }
 
 
@@ -396,7 +529,7 @@ def handle_message(msg):
         return _make_result(rid, {
             "protocolVersion": params.get("protocolVersion") or "2024-11-05",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "Jlink-Commander", "version": "1.1.0"}})
+            "serverInfo": {"name": "Jlink-Commander", "version": "1.2.0"}})
     if method == "notifications/initialized":
         return None
     if method == "ping":

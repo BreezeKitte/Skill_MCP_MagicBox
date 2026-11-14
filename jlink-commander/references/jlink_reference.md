@@ -111,3 +111,67 @@ Commander 会话：`connect → g → Sleep → w4 → mem → g → q`（`build
   但 `addr_map` 显式模式不受影响。
 - 任何写 RAM / 烧录都会改芯片状态，**先确认前置条件**（镜像存在、sha 一致、电源状态、
   接线正确）再执行（动手前 gate）。
+
+---
+
+## 6. 补充常用命令（官方 JLink.exe V9.88 内置 `?` 帮助实测语法）
+
+> 以下语法均来自**本机 JLink.exe V9.88 的 `?` 帮助输出**（一手权威）。每条标注
+> 「[MCP]」表示已有对应 MCP 工具；未标者作为知识沉淀，按需用 `jlink_exec` 走同一会话执行。
+
+### 6.1 宽度感知内存读写（[MCP]）
+| 命令 | 语法（帮助原文） | 说明 / 坑 |
+|---|---|---|
+| 读字节 | `Mem [<Zone>:]<Addr>, <NumBytes>` | 默认；已用于 NoHalt 采样 |
+| 读 8-bit | `Mem8 [<Zone>:]<Addr>, <NumBytes>` | 逐字节 |
+| 读 16-bit | `Mem16 [<Zone>:]<Addr>, <NumItems>` | 每项是半字（输出每 token 4 hex，小端）→ 解析需翻转 |
+| 读 32-bit | `Mem32 [<Zone>:]<Addr>, <NumItems>` | 每项是字（输出每 token 8 hex，小端）→ 解析需翻转 |
+| 写 8-bit | `Write1 / W1 [<Zone>:]<Addr>, <Data>` | |
+| 写 16-bit | `Write2 / W2 [<Zone>:]<Addr>, <Data>` | |
+| 写 32-bit | `Write4 / W4 [<Zone>:]<Addr>, <Data>` | 原 B20 同会话写读用这个 |
+| 写 64-bit | `Write8 / W8 [<Zone>:]<Addr>, <Data>` | 64-bit 原子写（如 64-bit 时间戳/计数器） |
+
+- **[MCP]** `jlink_read_memory` 加 `width`：8/16/32 → 自动选 `mem`/`mem16`/`mem32`，解析按宽度翻转还原字节。
+- **[MCP]** `jlink_write_ram` 加 `width`：1/2/4/8 → `w1`/`w2`/`w4`/`w8`，读回用同宽度命令。
+- **坑（R4 实测）**：帮助把长度标注 `(hex)`，但本工程实测 `mem`/`mem8` 长度按**十进制**解析（与 V988 实测一致）。脚本里长度一律按十进制传，不写 `0x` 前缀。
+
+### 6.2 保存 / 校验 / 擦除 Flash（[MCP]）
+| 命令 | 语法 | 说明 |
+|---|---|---|
+| 存内存到文件 | `SaveBin <filename>, <addr>, <NumBytes>` | [MCP] `jlink_save_memory`：离线分析 / Flash 备份 |
+| 校验 bin | `VerifyBin <filename>, <addr>` | [MCP] `jlink_verify_flash`（.bin）：烧录后 R6 读回校验 |
+| 校验 hex | （需先解析 HEX 再回读比对） | [MCP] `jlink_verify_flash`（.hex）：解析 Intel HEX → 逐记录 `mem` 回读 → 逐字节比对 |
+| 擦除 | `Erase [<SAddr>, <EAddr>]` | [MCP] `jlink_erase_flash`：无参=整片擦；给 SAddr+EAddr=区间擦 |
+
+- **R6 铁律落地**：`jlink_flash` 烧录后务必跟一次 `jlink_verify_flash`（.hex 自动比对），
+  逐记录 `all_match=true` 才判烧录有效；任一条 `match=false` 立即停，不轻信「loadfile 成功」。
+
+### 6.3 硬件状态 / 预检（[MCP]）
+| 命令 | 语法 | 说明 |
+|---|---|---|
+| 硬件状态 | `ShowHWStatus` | [MCP] `jlink_hw_status`：**无需目标板供电**（probe 在 USB 即可运行）。重点看 `VTref`（目标供电电压）与 `ITarget`（目标电流）。 |
+| 目标供电开关 | `Power <On\|Off> [perm]` | J-Link 的 5V-Supply 引脚给目标供电；`Power Off` 等价于断电。台架收尾可借 J-Link 断目标电（但本项目目标电归 it6721-control 管，勿混用）。 |
+
+- **台架动作前电源预检**：先 `jlink_hw_status`，若 `VTref=0.000V` 说明目标未上电（符合本 skill 不碰电源的边界）；若期望上电却为 0，先查 it6721 再动 J-Link。
+
+### 6.4 寄存器 / 断点（部分 [MCP]）
+| 命令 | 语法 | 说明 |
+|---|---|---|
+| 显示寄存器 | `Regs` | [MCP] `jlink_read_registers`：**会隐式 halt 内核**，仅用于固件已停（故障/断点后）或可接受短暂冻结；**勿在 ISR 活跃稳态观测用**（见 B22） |
+| 写寄存器 | `WReg <RegName>, <Value>` | 配合 `Regs` 用 |
+| 读单寄存器 | `RReg <RegName>` | |
+| 设断点 | `SetBP <addr> [A/T] [S/H]` | 断点命中即 halt；**B22 警示**：ISR 活跃时断点会冻结内核→PDB SEQERR 伪影。仅非实时场景用 |
+| 设观察点 | `SetWP <Addr> [R/W] [<Data> [<D-Mask>] [A-Mask]]]` | 数据断点，命中亦 halt，同理慎用 |
+| 清断点 | `ClearBP <BP_Handle>` / `ClrBP` | |
+| 查运行状态 | `IsHalted` / `WaitHalt [<TimeoutMs>]` | 不扰动地确认目标是否在跑（NoHalt 采样前可先 `IsHalted` 确认已在运行） |
+
+### 6.5 复位策略 / 高级（知识沉淀，用 `jlink_exec` 走）
+| 命令 | 语法 | 说明 |
+|---|---|---|
+| 复位类型 | `RSetType <Type>` | 连不上目标时换复位策略（0=Normal/1=Core/2=ResetPin…）。排障 connect 失败首选 |
+| 复位+延时 | `ResetX <DelayAfterReset>` | |
+| 执行命令串 | `Exec <CommandString>` | J-Link 内部命令串，如 `exec EnableFlashBP`（Flash 断点）、`exec SetSkipInit`、`exec SetDisableAutoUnlock`。高级/排障用 |
+| 测速 | `TestWSpeed` / `TestRSpeed` / `TestCSpeed` | 下载/上传/CPU 速度基准 |
+
+> 注：上述 §6.4/§6.5 未单独做 MCP 工具（避免暴露危险的 halt 类操作面），需要时统一经
+> `jlink_exec` 在同一会话内执行，并自行遵守 B20/B22 铁律。

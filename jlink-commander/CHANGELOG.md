@@ -5,6 +5,33 @@
 
 ---
 
+## [jlink-commander/v1.2.0] - 2026-11-14
+
+### Added
+- 内存读写宽度支持（吸收官方 JLink.exe V9.88 常用命令）：
+  - `jlink_read_memory` 新增 `width` 8/16/32 → `mem`/`mem16`/`mem32`；解析按宽度翻转还原字节。
+  - `jlink_write_ram` 新增 `width` 1/2/4/8 → `w1`/`w2`/`w4`/`w8`（64-bit 原子写）。
+- 5 个新 MCP 工具（共 13 个）：
+  - `jlink_save_memory`（`savebin`）：内存区间存 .bin，离线分析 / Flash 备份。
+  - `jlink_verify_flash`（`verifybin` + Intel HEX 解析回读比对）：烧录后 R6 读回校验，
+    `.hex` 自动逐记录比对 `all_match`，落实「烧录后必校验」铁律。
+  - `jlink_erase_flash`（`erase`）：整片或区间擦除。
+  - `jlink_hw_status`（`ShowHWStatus`）：读 VTref/ITarget，**无需目标供电**（probe 在 USB 即可），
+    台架动作前电源预检。
+  - `jlink_read_registers`（`regs`）：读 CPU 寄存器；会隐式 halt 内核，仅非实时场景用（B22）。
+- `references/jlink_reference.md` §6 新增「补充常用命令」：宽度读写、savebin/verifybin/erase、
+  ShowHWStatus/Power、regs/断点/IsHalted、RSetType/exec，语法均取自 V9.88 `?` 帮助（一手权威）。
+- core.py 新增宽度感知解析（`parse_mem_lines`/`tokens_to_bytes`/`assemble_region_lines`）、
+  Intel HEX 解析、各命令脚本构建器。
+
+### Changed
+- `jlink_read_memory` / `jlink_write_ram` 向后兼容：不传 `width` 时行为同 v1.1.0（字节读 / w4 写）。
+
+### Docs
+- 命令速查表与 B22/B20/R6 铁律同步更新到 SKILL.md、README.md 工具清单。
+
+---
+
 ## [jlink-commander/v1.1.0] - 2026-11-14
 
 ### Changed

@@ -149,17 +149,33 @@ def build_flash_script(hex_path, device="S32K144", iface="1", speed=4000,
     return "\n".join(lines) + "\n"
 
 
-def build_write_ram_script(addr, word_hex, device="S32K144", iface="1", speed=4000,
-                           readback_len=4):
-    """B20：写 RAM 与读回必须在同一会话。connect → g → Sleep → w4 → mem 读回 → q。
+WCMD = {1: "w1", 2: "w2", 4: "w4", 8: "w8"}
+RCMD = {1: "mem8", 2: "mem16", 4: "mem", 8: "mem32"}
+# 写字节宽(w1..w8) → 读回解析用的位宽（assemble_region_lines 第 4 参）：
+#   1B→mem8(8bit 直序)  2B→mem16(16bit 翻转)  4B→mem(8bit 直序)  8B→mem32(32bit 翻转)
+PARSE_WIDTH = {1: 8, 2: 16, 4: 8, 8: 32}
 
-    addr/word 均为整数。word 是 32-bit 字（小端 4 字节）。返回脚本文本。
+
+def build_write_ram_script(addr, word, device="S32K144", iface="1", speed=4000,
+                           readback_len=4, width=4, no_halt=True):
+    """B20：写 RAM 与读回必须在同一会话。connect → g → Sleep → wN → mem 读回 → q。
+
+    addr/word 均为整数；word 按 width 位宽截断（w1/w2/w4/w8）。读回用同宽度命令，
+    便于解析。返回脚本文本。
     """
+    if width not in WCMD:
+        raise ValueError("width 必须是 1/2/4/8，收到 %r" % width)
+    mask = (1 << (width * 8)) - 1
+    wcmd = WCMD[width]
+    rcmd = RCMD[width]
+    # readback_len 以字节计；换算成该宽度的条目数（width 此处为字节数 1/2/4/8）
+    rcount = max(1, readback_len // width)
+    suffix = " NoHalt" if no_halt else ""
     lines = build_connect_lines(device, iface, speed)
     lines += ["g", "Sleep 100",
-              f"w4 0x{addr:08X}, 0x{word_hex & 0xFFFFFFFF:08X}",
+              f"{wcmd} 0x{addr:08X}, 0x{word & mask:0{width * 2}X}",
               "Sleep 100",
-              f"mem 0x{addr:08X},{readback_len}",
+              f"{rcmd} 0x{addr:08X},{rcount}{suffix}",
               "g", "q"]
     return "\n".join(lines) + "\n"
 
@@ -199,3 +215,187 @@ def build_nohalt_sample_script(regions, device="S32K144", iface="1", speed=4000,
             lines.append(f"mem 0x{a:08X},{ln}{suffix}")
     lines.append("q")
     return "\n".join(lines) + "\n"
+
+
+# --------------------------------------------------------------------------
+# 宽度感知的内存读写（mem8/mem16/mem32 + w1/w2/w8）与解析
+# 命令语法均来自本机 JLink.exe V9.88 内置 `?` 帮助（一手权威）：
+#   Mem  [<Zone>:]<Addr>, <NumBytes> (hex)            读字节
+#   Mem8 [<Zone>:]<Addr>, <NumBytes> (hex)            读 8-bit
+#   Mem16 [<Zone>:]<Addr>, <NumItems> (hex)           读 16-bit 项
+#   Mem32 [<Zone>:]<Addr>, <NumItems> (hex)           读 32-bit 项
+#   W1/W2/W4/W8 [<Zone>:]<Addr>, <Data> (hex)        写 8/16/32/64-bit
+# 注：本工程实测 `mem` 长度按十进制解析（帮助标注 hex，但实测为十进制，以实测为准），
+#     故下面 count 一律按十进制传入。
+# --------------------------------------------------------------------------
+READ_CMD = {8: "mem", 16: "mem16", 32: "mem32"}
+
+
+def build_read_memory_script(addr, length, width=8, no_halt=True,
+                             device="S32K144", iface="1", speed=4000):
+    """生成单次读内存脚本。width 取 8/16/32（bit 宽）。count 按条目数算：
+    8→字节数；16→length//2；32→length//4。地址一律 0x... 十六进制。"""
+    if width not in READ_CMD:
+        raise ValueError("width 必须是 8/16/32，收到 %r" % width)
+    count = length if width == 8 else length // (width // 8)
+    cmd = READ_CMD[width]
+    suffix = " NoHalt" if no_halt else ""
+    lines = build_connect_lines(device, iface, speed)
+    lines += ["g", "Sleep 100",
+              f"{cmd} 0x{addr:08X},{count}{suffix}", "g", "q"]
+    return "\n".join(lines) + "\n"
+
+
+def build_savebin_script(addr, length, out_path, device="S32K144",
+                         iface="1", speed=4000):
+    """savebin：把目标内存区间存成二进制文件（离线分析 / Flash 备份）。
+    语法 SaveBin <filename>, <addr>, <NumBytes>。"""
+    lines = build_connect_lines(device, iface, speed)
+    lines += ["g", f"savebin {out_path}, 0x{addr:08X}, {length}", "q"]
+    return "\n".join(lines) + "\n"
+
+
+def build_verifybin_script(bin_path, addr, device="S32K144",
+                           iface="1", speed=4000):
+    """verifybin：校验 .bin 是否已烧录到指定地址（R6 读回校验）。
+    语法 VerifyBin <filename>, <addr>。"""
+    lines = build_connect_lines(device, iface, speed)
+    lines += [f"verifybin {bin_path}, 0x{addr:08X}", "q"]
+    return "\n".join(lines) + "\n"
+
+
+def build_erase_script(addr=None, length=None, device="S32K144",
+                       iface="1", speed=4000):
+    """erase：擦除 Flash。无参数=整片擦除；给定 addr+length=区间擦除。
+    语法 Erase [<SAddr>, <EAddr>]。"""
+    lines = build_connect_lines(device, iface, speed)
+    if addr is not None and length is not None:
+        end = addr + length - 1
+        lines.append(f"erase 0x{addr:08X}, 0x{end:08X}")
+    else:
+        lines.append("erase")
+    lines.append("q")
+    return "\n".join(lines) + "\n"
+
+
+def build_regs_script(device="S32K144", iface="1", speed=4000):
+    """regs：显示 CPU 寄存器（R0-R15、xPSR、MSP、PSP、LR、PC 等）。
+    注意：读取核心寄存器需要内核停止（Registers 命令会隐式 halt），故本命令
+    只用于固件已停（故障/断点后）或可接受短暂冻结的场景，勿在 ISR 活跃时用于
+    稳态观测（见 B22）。"""
+    lines = build_connect_lines(device, iface, speed)
+    lines += ["h", "regs", "q"]
+    return "\n".join(lines) + "\n"
+
+
+# ------------------------- 宽度感知解析 -------------------------
+MEM_LINE_RE = re.compile(r"^([0-9A-Fa-f]{8})\s*=\s*(.*)$")
+
+
+def parse_mem_lines(text):
+    """把 Commander mem/mem8/mem16/mem32 输出解析为 [(addr, [hex_token,...]), ...]。
+
+    每行形如 `20000000 = 12 34 56 78   .4Vx`（字节）或
+    `20000000 = 3412 7856`（mem16，每 token 4 hex）或
+    `20000000 = 78563412`（mem32，每 token 8 hex）。仅收集连续 hex token。
+    """
+    out = []
+    for line in text.splitlines():
+        s = line.strip()
+        m = MEM_LINE_RE.match(s)
+        if not m:
+            continue
+        addr = int(m.group(1), 16)
+        rest = m.group(2)
+        tokens = []
+        for tok in rest.split():
+            if re.fullmatch(r"[0-9A-Fa-f]{2,}", tok):
+                tokens.append(tok)
+            else:
+                break
+        if tokens:
+            out.append((addr, tokens))
+    return out
+
+
+def tokens_to_bytes(tokens, width):
+    """按宽度把 hex token 转成内存字节（小端字/双字需翻转）。
+
+    width 1/8 → 每 token 2 hex = 1 字节（直序）；
+    width 2/16 → 每 token 4 hex = 1 个 LE 半字 → 翻转；
+    width 4/32 → 每 token 8 hex = 1 个 LE 字 → 翻转。
+    """
+    buf = bytearray()
+    for t in tokens:
+        b = bytes.fromhex(t)
+        if width in (2, 16, 4, 32):
+            b = b[::-1]
+        buf += b
+    return bytes(buf)
+
+
+def assemble_region_lines(lines, region_addr, region_len, width=8):
+    """把落在 [region_addr, region_addr+len) 内的行按地址拼接成连续字节。"""
+    rel = [(a, toks) for a, toks in lines if region_addr <= a < region_addr + region_len]
+    rel.sort(key=lambda x: x[0])
+    buf = bytearray()
+    for _a, toks in rel:
+        buf += tokens_to_bytes(toks, width)
+    return bytes(buf[:region_len])
+
+
+# ------------------------- Intel HEX 解析（verify .hex 用） -------------------------
+def parse_intel_hex(path):
+    """解析 Intel HEX 为已排序的 [(addr, bytes), ...] 数据记录（处理 04 扩展线性地址）。"""
+    records = []
+    hi = 0
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            line = line.strip()
+            if not line.startswith(":"):
+                continue
+            body = line[1:]
+            if len(body) < 10:
+                continue
+            count = int(body[0:2], 16)
+            addr = int(body[2:6], 16)
+            rtype = int(body[6:8], 16)
+            data_hex = body[8:8 + count * 2]
+            if rtype == 0:
+                base = (hi << 16) | addr
+                records.append((base, bytes.fromhex(data_hex)))
+            elif rtype == 4:
+                hi = int(data_hex, 16)
+            elif rtype == 1:
+                break
+    records.sort(key=lambda x: x[0])
+    return records
+
+
+def build_verify_hex_script(records, device="S32K144", iface="1", speed=4000):
+    """一次会话读回所有 HEX 记录区间，便于逐条比对（R6 读回校验）。"""
+    lines = build_connect_lines(device, iface, speed)
+    lines += ["g"]
+    for addr, data in records:
+        lines.append(f"mem 0x{addr:08X},{len(data)}")
+    lines.append("q")
+    return "\n".join(lines) + "\n"
+
+
+def compare_hex(out, records):
+    """把读回输出与 HEX 记录逐条比对，返回 [{addr, len, match, first_mismatch_offset}]。"""
+    rows = parse_mem_output(out)
+    results = []
+    for addr, data in records:
+        block = assemble_region(rows, addr, len(data))
+        ok = block == data
+        miss = None
+        if not ok:
+            for i in range(min(len(data), len(block))):
+                if data[i] != block[i]:
+                    miss = i
+                    break
+        results.append({"addr": "0x%08X" % addr, "len": len(data),
+                        "match": ok, "first_mismatch_offset": miss})
+    return results
+

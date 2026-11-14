@@ -30,11 +30,20 @@ MCP 服务以 **`Jlink-Commander`** 注册名（注意大写 C，与系统里另
 
 典型流程：
 1. `jlink_selftest` — 自检 JLink.exe 是否存在、版本探针（不连真机）、pyelftools 是否就绪。
-2. `jlink_dwarf_resolve` — 解析 `.axf` 拿到全局基址与成员偏移（R6 地址重算，必须在改结构后做）。
-3. `jlink_nohalt_sample` — 核心：给定 `axf`+`regions_spec`（或显式 `addr_map`），稳态
+2. `jlink_hw_status` — 台架动作前电源预检：读 `VTref`/`ITarget`（probe 在 USB 即可，无需目标供电）。
+3. `jlink_dwarf_resolve` — 解析 `.axf` 拿到全局基址与成员偏移（R6 地址重算，必须在改结构后做）。
+4. `jlink_nohalt_sample` — 核心：给定 `axf`+`regions_spec`（或显式 `addr_map`），稳态
    NoHalt 采样 N 帧，输出 CSV/JSON；可带 `writes` 做同一会话内的在线单变量 A/B。
-4. `jlink_write_ram` — 同会话写 32-bit RAM 字并读回校验（B20 铁律）。
-5. `jlink_flash` — 烧录；烧录后务必读回校验（R6）。
+5. `jlink_write_ram` — 同会话写 RAM 字并读回校验（B20 铁律）。`width` 取 1/2/4/8 映射到 w1/w2/w4/w8。
+6. `jlink_read_memory` — 单次读内存，默认 NoHalt；`width` 取 8/16/32 映射到 mem/mem16/mem32。
+7. `jlink_flash` — 烧录；烧录后**务必 `jlink_verify_flash` 读回校验（R6）**。
+8. `jlink_save_memory` — `savebin` 把内存区间存成 .bin（离线分析 / Flash 备份）。
+9. `jlink_erase_flash` — `erase` 整片或区间擦除（烧录前清保护扇区时用）。
+10. `jlink_read_registers` — `regs` 读 CPU 寄存器；**会隐式 halt 内核**，仅故障/断点后或非实时场景用（见 B22）。
+11. `jlink_exec` — 执行任意 Commander 命令列表（RSetType / exec / SetBP 等高级用法走这里）。
+
+命令速查与每条命令的实测语法见 `references/jlink_reference.md`（§6 收录宽度读写、savebin/
+verifybin/erase、ShowHWStatus、regs/断点、RSetType/exec 等常用命令）。
 
 完整命令速查、铁律（B20/B21/B22…）、标准工作流与可移植方法见
 `references/jlink_reference.md`。
@@ -49,6 +58,11 @@ MCP 服务以 **`Jlink-Commander`** 注册名（注意大写 C，与系统里另
   确保 `output=false` 并读回 `link_lost=false`。任何烧录/写 RAM 前先确认前置条件
   （镜像存在且 sha 一致、接线正确、电源状态已知）。
 - **DWARF 依赖 pyelftools**：未装时 `jlink_dwarf_resolve` 报错，但显式 `addr_map` 模式不受影响。
+- **`regs`/`SetBP`/`SetWP` 会 halt 内核**：`jlink_read_registers` 与 `jlink_exec` 里的
+  断点/观察点命中即冻结 Cortex-M 内核。仅在固件已停（故障/断点后）或可接受短暂冻结时
+  使用；**电机 ISR 活跃时禁用**（B22：halt → PDB SEQERR 伪影）。
+- **烧录后必做 R6 读回校验**：`jlink_flash` 之后立即 `jlink_verify_flash`（.hex 自动逐记录
+  比对），`all_match=true` 才判有效；任一条不符立即停，不轻信 "loadfile 成功"。
 
 ## Notes
 - MCP 服务为纯标准库 Python（仅 DWARF 解析可选依赖 pyelftools），与 it6721-control 同范式。
