@@ -64,6 +64,8 @@ it6721-control/                  # ← 整个目录复制到 ~/.workbuddy/skills
 │   └── it6721_reference.md      # 20 工具完整参数表 + 安全边界
 └── scripts/
     ├── it6721_mcp.py            # MCP 服务（纯标准库）
+    ├── it6721_mcp_launcher.bat  # Windows 启动器：自动探测 Python 后启动 MCP
+    ├── it6721_mcp_launcher.sh   # Linux/macOS 启动器：同上
     └── it6721/                  # 内嵌引擎（随 IT6721_Console v2.2.2 打包）
         ├── __init__.py
         ├── protocol.py          # 26 字节二进制帧编解码
@@ -97,9 +99,9 @@ cd Skill_MCP_MagicBox
 # 2) 把本项目复制到 WorkBuddy 用户级技能目录
 cp -r it6721-control "$HOME/.workbuddy/skills/it6721-control"
 
-# 3) 复制连接器配置模板，并改成你本机的脚本路径
+# 3) 复制连接器配置模板，把 command 改成你本机的启动器绝对路径（只需替换 <你的用户名>）
 cp it6721-control/examples/it6721-control.mcp.json "$HOME/.workbuddy/it6721-control.json"
-#   编辑该文件，把 args 里的路径换成你实际的 it6721_mcp.py 绝对路径
+#   模板已指向 scripts/it6721_mcp_launcher.{bat,sh}，启动器会自动定位 Python 与同目录的 it6721_mcp.py
 ```
 
 然后：
@@ -110,7 +112,7 @@ cp it6721-control/examples/it6721-control.mcp.json "$HOME/.workbuddy/it6721-cont
 
 启用后，任务里提到"IT6721 / 程控电源 / 电源控制"就会自动按 `mcp__it6721-control__it6721_*` 形式调用工具。
 
-**关于 `command`**：示例配置用 `python`（假设 `python` 已在 PATH）。若你的 `python` 不在 PATH，把 `command` 改成 Python 3.10+ 解释器的**绝对路径**（例如 WorkBuddy 托管 Python 或系统 Python）。
+**关于 `command`**：模板已指向 `it6721_mcp_launcher.{bat,sh}` 启动器，启动器会**自动探测 Python**（优先 WorkBuddy 自带，其次系统 PATH 的 `python`/`py`），并基于自身目录定位 `it6721_mcp.py`——因此你只需把 `<你的用户名>` 替换为实际用户名，**无需手动改 Python 版本或脚本绝对路径**。
 
 ---
 
@@ -149,15 +151,16 @@ cp it6721-control/examples/it6721-control.mcp.json "$HOME/.workbuddy/it6721-cont
 
 | 维度 | 当前值 | 含义 |
 |---|---|---|
-| **本项目版本** | `it6721-control/v1.0.0` | 本 Skill + MCP 封装的版本 |
+| **本项目版本** | `it6721-control/v1.1.0` | 本 Skill + MCP 封装的版本 |
 | **内嵌引擎版本** | `it6721 v2.2.2` | 打包进 `scripts/it6721/` 的 IT6721_Console 控制包版本 |
 
 完整变更记录见 [`CHANGELOG.md`](CHANGELOG.md)。
 
 **冒烟自检**（不碰硬件）：
 ```bash
-python it6721-control/scripts/it6721_mcp.py   # 应无报错地等待 stdin；Ctrl-C 退出
-# 或发送一次 initialize 看 serverInfo.name == "it6721-control"、tools 数量 == 20
+# 直接跑（需 python3 在 PATH）：应无报错地等待 stdin；Ctrl-C 退出
+python3 it6721-control/scripts/it6721_mcp.py
+# 或发送一次 initialize 看 serverInfo.name == "it6721-control"、version == "1.1.0"、tools 数量 == 20
 ```
 
 ---

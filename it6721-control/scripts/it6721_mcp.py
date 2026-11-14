@@ -429,7 +429,7 @@ def handle_message(msg):
         return _make_result(rid, {
             "protocolVersion": params.get("protocolVersion") or "2024-11-05",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "it6721-control", "version": "1.0.0"}})
+            "serverInfo": {"name": "it6721-control", "version": "1.1.0"}})
     if method == "notifications/initialized":
         return None
     if method == "ping":

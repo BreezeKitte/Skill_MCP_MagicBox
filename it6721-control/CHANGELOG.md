@@ -5,6 +5,20 @@
 
 ---
 
+## [it6721-control/v1.1.0] - 2026-11-14
+
+### Changed
+- **去除个人环境依赖（可分享给他人的关键）**：新增跨平台启动器 `scripts/it6721_mcp_launcher.{bat,sh}`，自动探测 Python 解释器（优先 WorkBuddy 自带 `~/.workbuddy/binaries/python/versions/*/python.exe`，其次系统 PATH 的 `python`/`py`），并基于启动器自身目录定位 `it6721_mcp.py`。
+- 示例连接器配置 `examples/it6721-control.mcp.json` 的 `command` 由写死的 `python` + `C:\Users\<你的用户名>\...` 改为指向启动器，用户只需替换 `<你的用户名>` 即可，**无需手动改 Python 版本或脚本绝对路径**。
+- README 安装步骤去掉「手动改 args 路径」与「python 必须在 PATH」提示；`command` 说明改为启动器自动探测。
+- `it6721_mcp.py` 的 `serverInfo.version` 由 `1.0.0` 升到 `1.1.0`。
+
+### Notes
+- MCP 名称 `it6721-control` 保持不变：当前系统中**没有**与之重名的其他 MCP，无辨识冲突（命名规则仅要求"唯一可辨识"，本名已满足）。
+- 其余代码零改动：MCP 服务本就基于 `__file__` 相对定位内嵌 `it6721/` 包与 `~/it6721_recordings` 数据目录，已具备可移植性。
+
+---
+
 ## [it6721-control/v1.0.0] - 2026-11-10
 
 ### Added
