@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "jlink-commander": {
+      "type": "stdio",
+      "command": "python",
+      "args": [
+        "C:\\Users\\<你的用户名>\\.workbuddy\\skills\\jlink-commander\\scripts\\jlink_commander_mcp.py"
+      ],
+      "env": {
+        "JLINK_EXE": "C:\\Program Files\\SEGGER\\JLink_V988\\JLink.exe"
+      }
+    }
+  }
+}

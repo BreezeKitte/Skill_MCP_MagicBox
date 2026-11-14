@@ -12,7 +12,7 @@ Skill 与 MCP 服务放在一起，方便统一管理、分享与协作。
 | 项目 | 说明 | 版本 | 路径 |
 |---|---|---|---|
 | **it6721-control** | ITECH IT6721 程控直流电源（0–60V/8A/180W）的 Skill + 纯标准库 MCP 服务，20 个工具、内置模拟器、三重安全边界 | `it6721-control/v1.0.0` | [`it6721-control/`](it6721-control/) |
-| _（待添加）_ | JLink 等第三方 MCP 的配置封装（路线图） | — | — |
+| **jlink-commander** | J-Link Commander 实战技巧 Skill + 纯标准库 Python MCP：烧录、不停机 NoHalt 读 RAM、同会话写 RAM 在线 A/B、DWARF 解析绝对地址。**禁用 J-Link GDB** | `jlink-commander/v1.0.0` | [`jlink-commander/`](jlink-commander/) |
 
 > 新增项目时，在仓库根目录下新建一个与项目同名的子目录，结构参照 `it6721-control/`
 > （`SKILL.md` + `README.md` + `CHANGELOG.md` + `examples/` + `references/` + `scripts/`）。
@@ -71,6 +71,6 @@ cp <项目名>/examples/*.mcp.json "$HOME/.workbuddy/<项目名>.json"
 
 ## 路线图
 
-- [ ] **JLink**：本机仅为第三方 npm 包 `jlink-mcp@0.8.0` 的配置封装（无自写源码）。后续加 `jlink/` 子项目，提供 `jlink-mcp.json` 配置模板 + 安装说明，便于他人 `npm install` 复现。
+- [x] **jlink-commander**：已将 J-Link Commander 实战技巧（NoHalt 采样 / 同会话写读 B20 / DWARF 地址重算 R6 / 禁 GDB）封装为 `jlink-commander/` 子项目（Skill + Python MCP，`jlink-commander/v1.0.0`）。本机另有一个第三方 npm 包 `jlink-mcp@0.8.0` 仅作通用 Commander 封装，与本 skill 互补、不冲突。
 - [ ] 工具声明名去重：当前 `it6721-control` 暴露为 `mcp__it6721-control__it6721_*`，服务名与工具前缀重复 `it6721`；如需更短名字可机械去掉工具声明前缀。
 - [ ] 真机写指令级实测文档（判通硬指标达成后的端到端范例）。
