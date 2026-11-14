@@ -5,7 +5,8 @@
 内写 RAM 做在线单变量 A/B、DWARF 解析全局地址。核心立场：**只用 Commander，禁用 J-Link GDB**
 （GDB 会 halt 内核、冻住 ISR 触发 PDB 序列错误伪影）。
 
-版本：`jlink-commander/v1.0.0` ｜ 路径：`jlink-commander/`
+版本：`jlink-commander/v1.1.0` ｜ 路径：`jlink-commander/`
+注册名（MCP）：**`Jlink-Commander`**（连接器里显示的名字，大写 C，与另一个 `jlink` node MCP 区分）
 
 ---
 
@@ -19,22 +20,25 @@ cd Skill_MCP_MagicBox
 # 2) 把 jlink-commander 复制到 WorkBuddy 用户级技能目录
 cp -r jlink-commander "$HOME/.workbuddy/skills/jlink-commander"
 
-# 3) 复制连接器配置模板，改成你本机的脚本绝对路径
-cp jlink-commander/examples/jlink-commander.mcp.json "$HOME/.workbuddy/jlink-commander.json"
+# 3) 复制连接器配置模板，改成你本机的启动器绝对路径
+cp jlink-commander/examples/jlink-commander.mcp.json "$HOME/.workbuddy/Jlink-Commander.json"
+#   然后编辑该文件，把 command 里的 <你的用户名> 改成你自己的用户名（脚本路径由启动器 %~dp0 推算，无需改）
 ```
 
 然后**完全重启 WorkBuddy** → 打开**连接器管理页（右上角）→ 自定义连接器** → 找到
-`jlink-commander` → 点 **Trust** 启用。工具以 `mcp__jlink-commander__jlink_*` 暴露。
+`Jlink-Commander` → 点 **Trust** 启用。工具以 `mcp__Jlink-Commander__jlink_*` 暴露。
 
-> 中央 `~/.workbuddy/mcp.json` 也同步列出该服务（与 `it6721-control` 并列）。
+> 中央 `~/.workbuddy/mcp.json` 也同步列出该服务（与 `it6721-control` 并列，二者注册名不同、互不混淆）。
 
 ---
 
 ## 前置依赖
 
-- **J-Link Software and Documentation Pack**（本机默认 `C:/Program Files/SEGGER/JLink_V988/JLink.exe`），
-  可用环境变量 `JLINK_EXE` 覆盖。
-- **Python ≥ 3.10**（WorkBuddy 自带）。
+- **J-Link Software and Documentation Pack**：脚本会**自动探测最新安装的 `JLink_V*`**（不再写死版本号）；
+  特殊安装位可用环境变量 `JLINK_EXE` 覆盖。Linux/macOS 下也会探测 `/opt/SEGGER/JLink` 与 PATH。
+- **Python ≥ 3.10**：由随附启动器 `scripts/jlink_commander_mcp_launcher.{bat,sh}` 自动定位
+  （优先 WorkBuddy 自带 python，其次系统 PATH 的 `python`/`py`）。**无需把 Python 加进 PATH**，
+  也无需写死任何用户名 / 版本路径——这正是本 skill 可分享给他人的关键。
 - **可选**：`pip install pyelftools` —— 仅 `jlink_dwarf_resolve` 需要；显式 `addr_map` 采样模式
   不依赖它。
 
@@ -58,18 +62,19 @@ cp jlink-commander/examples/jlink-commander.mcp.json "$HOME/.workbuddy/jlink-com
 ## 冒烟自检（不碰硬件）
 
 ```bash
-# 1) 环境变量指向 WorkBuddy Python 与本 skill
-PY=~/.workbuddy/binaries/python/versions/3.13.12/python.exe   # 或本机 python3
-SK=~/.workbuddy/skills/jlink-commander/scripts
+# 1) 定位一个 Python 解释器（WorkBuddy 自带或系统 PATH 上的 python3）
+PY=$(ls -d ~/.workbuddy/binaries/python/versions/*/python.exe 2>/dev/null | sort -r | head -1)
+: "${PY:=$(command -v python3 || command -v python)}"
+SK=~/.workbuddy/skills/jlink-commander/scripts   # 或本仓库 jlink-commander/scripts
 
 # 2) 语法编译
-$PY -m py_compile $SK/jlink_commander_mcp.py $SK/jlink_commander/*.py
+"$PY" -m py_compile $SK/jlink_commander_mcp.py $SK/jlink_commander/*.py
 
-# 3) 环境自检（会探针 JLink.exe 版本，不连目标）
-$PY -c "import sys; sys.path.insert(0,'$SK'); from jlink_commander import selftest; import json; print(json.dumps(selftest(), indent=2, ensure_ascii=False))"
+# 3) 环境自检（会探针 JLink 版本，不连目标）
+"$PY" -c "import sys; sys.path.insert(0,'$SK'); from jlink_commander import selftest; import json; print(json.dumps(selftest(), indent=2, ensure_ascii=False))"
 
 # 4) 生成一段 no-halt 采样脚本看看（不执行）
-$PY -c "import sys; sys.path.insert(0,'$SK'); from jlink_commander import build_nohalt_sample_script as b; print(b([('drv',0x20000000,16)], samples=3, period_ms=100, init_ms=500))"
+"$PY" -c "import sys; sys.path.insert(0,'$SK'); from jlink_commander import build_nohalt_sample_script as b; print(b([('drv',0x20000000,16)], samples=3, period_ms=100, init_ms=500))"
 ```
 
 全部无报错即说明服务可用。真机动作在 WorkBuddy 内经由 MCP 工具触发。

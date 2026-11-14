@@ -24,9 +24,9 @@ halt 内核、冻住电机控制 ISR，导致 PDB 序列错误等伪影（见 re
 - 改完源码/结构后，需要重新解析全局变量地址（DWARF）。
 
 ## How to use
-MCP 服务以 **`jlink-commander`** 注册名写入 `~/.workbuddy/jlink-commander.json`（并同步列入
-中央 `~/.workbuddy/mcp.json`），stdio 传输。用户在连接器管理页 **Trust** 启用后，工具以
-`mcp__jlink-commander__jlink_*` 形式暴露，直接按完整名调用。
+MCP 服务以 **`Jlink-Commander`** 注册名（注意大写 C，与系统里另一个 `jlink` node MCP 区分）
+写入 `~/.workbuddy/Jlink-Commander.json`（并同步列入中央 `~/.workbuddy/mcp.json`），stdio 传输。
+用户在连接器管理页 **Trust** 启用后，工具以 `mcp__Jlink-Commander__jlink_*` 形式暴露，直接按完整名调用。
 
 典型流程：
 1. `jlink_selftest` — 自检 JLink.exe 是否存在、版本探针（不连真机）、pyelftools 是否就绪。
@@ -52,8 +52,11 @@ MCP 服务以 **`jlink-commander`** 注册名写入 `~/.workbuddy/jlink-commande
 
 ## Notes
 - MCP 服务为纯标准库 Python（仅 DWARF 解析可选依赖 pyelftools），与 it6721-control 同范式。
-- **自包含**：核心模块 `scripts/jlink_commander/`（core/dwarf/selftest）开箱即用，无需环境变量；
-  可选 `JLINK_EXE` 覆盖安装位，默认 `C:/Program Files/SEGGER/JLink_V988/JLink.exe`。
+- **自包含 / 零个人环境依赖**：核心模块 `scripts/jlink_commander/`（core/dwarf/selftest）开箱即用；
+  Python 由启动器 `scripts/jlink_commander_mcp_launcher.{bat,sh}` 自动探测（优先 WorkBuddy 自带、
+  其次系统 PATH），不再写死用户名 / Python 版本路径；J-Link 可执行文件由 `core.resolve_exe`
+  **自动探测最新 `JLink_V*` 安装**（环境变量 `JLINK_EXE` 仍可覆盖）。因此分享给他人时只需把
+  连接器配置的 `command` 指向其本机启动器路径即可。
 - 安装与版本迭代见仓库根 `README.md`：clone → 复制 skill 到
   `~/.workbuddy/skills/jlink-commander` → 复制 `examples/jlink-commander.mcp.json` 到
-  `~/.workbuddy/jlink-commander.json` → 在连接器管理页 Trust。
+  `~/.workbuddy/Jlink-Commander.json` → 在连接器管理页 Trust。
