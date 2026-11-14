@@ -27,7 +27,7 @@ def selftest(jlink_exe=None):
             info["probe_error"] = str(e)
     else:
         info["probe_ok"] = False
-        info["probe_error"] = "JLink.exe 未找到，请用 JLINK_EXE 或默认安装位"
+        info["probe_error"] = "JLink 可执行文件未找到：请用 JLINK_EXE 指定，或确认 SEGGER 已安装（脚本会自动探测最新版本）"
     try:
         import elftools  # noqa: F401
         info["pyelftools"] = True

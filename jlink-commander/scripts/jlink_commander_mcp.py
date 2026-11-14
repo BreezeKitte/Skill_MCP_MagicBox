@@ -18,6 +18,7 @@ import os
 import sys
 import json
 import struct
+import tempfile
 import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -203,7 +204,9 @@ def t_nohalt_sample(args):
     anchor = regions[0][1]
     cycles = _group_samples(rows, anchor)
 
-    outdir = args.get("outdir", "captures")
+    # 默认输出到系统临时目录下的固定子目录，避免依赖运行 CWD（MCP 的 CWD 不可预期）
+    outdir = args.get("outdir") or os.path.join(
+        tempfile.gettempdir(), "jlink_commander_captures")
     os.makedirs(outdir, exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     csv_path = os.path.join(outdir, "jlink_sample_%s.csv" % ts)
@@ -283,7 +286,7 @@ TOOLS = [
     {"name": "jlink_selftest",
      "description": "环境自检：检查 JLink.exe 是否存在、版本探针（不连真机）、pyelftools 是否可用。安全，无硬件访问。",
      "inputSchema": {"type": "object", "properties": {
-         "jlink_exe": {"type": "string", "description": "可选覆盖 JLink.exe 路径（默认 JLINK_EXE 或 C:/Program Files/SEGGER/JLink_V988/JLink.exe）"}}}},
+         "jlink_exe": {"type": "string", "description": "可选覆盖 JLink 可执行文件路径（默认 JLINK_EXE，否则自动探测最新 SEGGER 安装，最后回退默认路径）"}}}},
     {"name": "jlink_build_script",
      "description": "根据参数生成 Commander 脚本文本（不执行），便于人工审阅后再跑。kind: connect/flash/write_ram/nohalt_sample。",
      "inputSchema": {"type": "object", "properties": {
@@ -393,7 +396,7 @@ def handle_message(msg):
         return _make_result(rid, {
             "protocolVersion": params.get("protocolVersion") or "2024-11-05",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "jlink-commander", "version": "1.0.0"}})
+            "serverInfo": {"name": "Jlink-Commander", "version": "1.1.0"}})
     if method == "notifications/initialized":
         return None
     if method == "ping":

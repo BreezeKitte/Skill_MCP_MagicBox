@@ -3,3 +3,10 @@
 *.json text eol=lf
 *.md text eol=lf
 *.jlink text eol=lf
+# 启动器：.sh 走 LF；.bat 用 CRLF（Windows cmd 对 CRLF 最稳）
+*.sh text eol=lf
+*.bat text eol=crlf
+
+# 编译缓存不入库
+__pycache__/
+*.pyc

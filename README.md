@@ -12,7 +12,7 @@ Skill 与 MCP 服务放在一起，方便统一管理、分享与协作。
 | 项目 | 说明 | 版本 | 路径 |
 |---|---|---|---|
 | **it6721-control** | ITECH IT6721 程控直流电源（0–60V/8A/180W）的 Skill + 纯标准库 MCP 服务，20 个工具、内置模拟器、三重安全边界 | `it6721-control/v1.0.0` | [`it6721-control/`](it6721-control/) |
-| **jlink-commander** | J-Link Commander 实战技巧 Skill + 纯标准库 Python MCP：烧录、不停机 NoHalt 读 RAM、同会话写 RAM 在线 A/B、DWARF 解析绝对地址。**禁用 J-Link GDB** | `jlink-commander/v1.0.0` | [`jlink-commander/`](jlink-commander/) |
+| **jlink-commander** | J-Link Commander 实战技巧 Skill + 纯标准库 Python MCP：烧录、不停机 NoHalt 读 RAM、同会话写 RAM 在线 A/B、DWARF 解析绝对地址。**禁用 J-Link GDB**。MCP 注册名 **`Jlink-Commander`**（大写 C，与系统里 `jlink` node MCP 区分） | `jlink-commander/v1.1.0` | [`jlink-commander/`](jlink-commander/) |
 
 > 新增项目时，在仓库根目录下新建一个与项目同名的子目录，结构参照 `it6721-control/`
 > （`SKILL.md` + `README.md` + `CHANGELOG.md` + `examples/` + `references/` + `scripts/`）。
@@ -43,6 +43,12 @@ cp <项目名>/examples/*.mcp.json "$HOME/.workbuddy/<项目名>.json"
 
 - **命名空间标签**：每个项目的版本标签格式为 `<项目名>/vX.Y.Z`
   （例如 `it6721-control/v1.0.0`）。这样各项目可独立打 tag，互不覆盖。
+- **MCP / Skill 注册名必须唯一、可辨识**（重要）：每个新增的 Skill + MCP，其 MCP `serverInfo.name`
+  与连接器 key（即 `~/.workbuddy/mcp.json` 里的键，以及 `examples/*.mcp.json` 的键）**必须使用一个
+  与其他 MCP 不重名、人类一眼能分辨的名字**，不允许多个 MCP 共用一个泛化名字（否则在连接器列表里
+  无法区分）。命名建议：`项目功能 + 实现方式` 的清晰组合，例如本仓库的 `it6721-control`、
+  `Jlink-Commander`。Skill 目录名可保持 kebab-case（如 `jlink-commander`），但暴露在系统里的 MCP
+  注册名要足够独特。改动 serverInfo.name 属**破坏性变更**，须在 CHANGELOG 标注并提醒重新 Trust。
 - **每个项目自带 `CHANGELOG.md`**，只记录该项目的变更；仓库级变动（如新增项目、改索引）才动 root 提交。
 - **分支**：`main` = 稳定基线，`dev` = 日常迭代（可针对某项目开 `dev-<项目名>` 分支）。
 - **提交规范**：conventional commits（`feat:` / `fix:` / `docs:` / `chore:`），提交信息建议带项目名前缀，如 `feat(it6721-control): ...`。
@@ -71,6 +77,7 @@ cp <项目名>/examples/*.mcp.json "$HOME/.workbuddy/<项目名>.json"
 
 ## 路线图
 
-- [x] **jlink-commander**：已将 J-Link Commander 实战技巧（NoHalt 采样 / 同会话写读 B20 / DWARF 地址重算 R6 / 禁 GDB）封装为 `jlink-commander/` 子项目（Skill + Python MCP，`jlink-commander/v1.0.0`）。本机另有一个第三方 npm 包 `jlink-mcp@0.8.0` 仅作通用 Commander 封装，与本 skill 互补、不冲突。
+- [x] **jlink-commander**：已将 J-Link Commander 实战技巧（NoHalt 采样 / 同会话写读 B20 / DWARF 地址重算 R6 / 禁 GDB）封装为 `jlink-commander/` 子项目（Skill + Python MCP，`jlink-commander/v1.1.0`）。MCP 注册名 `Jlink-Commander`，并提供跨平台启动器、自动探测 J-Link/Python，便于分享。本机另有一个第三方 npm 包 `jlink-mcp@0.8.0` 仅作通用 Commander 封装，与本 skill 互补、不冲突。
+- [x] **MCP 注册名唯一化约定**：已写入上方「版本与迭代约定」，新增 Skill/MCP 必须暴露不重名、可辨识的注册名，避免系统里多个 MCP 同名无法区分。
 - [ ] 工具声明名去重：当前 `it6721-control` 暴露为 `mcp__it6721-control__it6721_*`，服务名与工具前缀重复 `it6721`；如需更短名字可机械去掉工具声明前缀。
 - [ ] 真机写指令级实测文档（判通硬指标达成后的端到端范例）。

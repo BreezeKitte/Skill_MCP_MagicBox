@@ -9,16 +9,61 @@ GDB 会 halt 内核，把电机控制 ISR 冻住，导致 PDB 序列错误等伪
 """
 import os
 import re
+import glob
+import shutil
 import tempfile
 import subprocess
 
+# 兜底默认值（旧版固定路径）；实际运行时优先自动探测最新安装，避免写死版本号。
 DEFAULT_JLINK_EXE = "C:/Program Files/SEGGER/JLink_V988/JLink.exe"
 
 
+def _candidate_exe_paths():
+    """可能的 JLink 可执行文件位置（不依赖固定版本号，按版本降序返回）。
+
+    Windows 默认装到 C:/Program Files/SEGGER/JLink_Vxxxx/JLink.exe；
+    Linux/macOS 常见 /opt/SEGGER/JLink/JLinkExe。返回列表已按版本号从新到旧排序。
+    """
+    found = []
+    bases = [
+        os.environ.get("ProgramFiles", "C:/Program Files"),
+        os.environ.get("ProgramFiles(x86)", "C:/Program Files (x86)"),
+        "C:/Program Files/SEGGER",
+        "C:/Program Files (x86)/SEGGER",
+        "/opt/SEGGER/JLink",
+        "/Applications/SEGGER/JLink",
+    ]
+    for base in bases:
+        if not base or not os.path.isdir(base):
+            continue
+        # Windows 风格：JLink_V* 目录（按版本降序）
+        for d in sorted(glob.glob(os.path.join(base, "JLink_V*")), reverse=True):
+            for name in ("JLink.exe", "JLinkExe"):
+                p = os.path.join(d, name)
+                if os.path.isfile(p):
+                    found.append(p)
+        # 目录内直接放可执行（Linux/macOS 常见）
+        for name in ("JLinkExe", "JLink.exe", "JLink"):
+            p = os.path.join(base, name)
+            if os.path.isfile(p):
+                found.append(p)
+    return found
+
+
 def resolve_exe(exe=None):
-    """返回 JLink.exe 绝对路径：优先入参，其次环境变量 JLINK_EXE，最后默认安装位。"""
-    exe = exe or os.environ.get("JLINK_EXE") or DEFAULT_JLINK_EXE
-    return exe
+    """返回 JLink 可执行文件绝对路径，按优先级：
+
+    入参 > 环境变量 JLINK_EXE > 自动探测最新安装（不写死版本号）> PATH > 兜底默认。
+    """
+    exe = exe or os.environ.get("JLINK_EXE")
+    if exe:
+        return exe
+    for p in _candidate_exe_paths():
+        return p  # 已按版本降序，取最新
+    on_path = shutil.which("JLink.exe") or shutil.which("JLinkExe") or shutil.which("JLink")
+    if on_path:
+        return on_path
+    return DEFAULT_JLINK_EXE
 
 
 def run_script(jlink_exe, script_text, timeout=600, cwd=None):

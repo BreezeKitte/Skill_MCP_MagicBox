@@ -5,6 +5,26 @@
 
 ---
 
+## [jlink-commander/v1.1.0] - 2026-11-14
+
+### Changed
+- **MCP 注册名由 `jlink-commander` 改为 `Jlink-Commander`**（大写 C）：系统里与另一个 `jlink` node MCP
+  区分，避免多个 MCP 同名无法辨识。工具调用前缀相应变为 `mcp__Jlink-Commander__jlink_*`。
+- **去除个人环境依赖，便于分享**：
+  - 新增跨平台启动器 `scripts/jlink_commander_mcp_launcher.{bat,sh}`，自动探测 Python
+    （优先 WorkBuddy 自带，其次系统 PATH），不再写死用户名 / Python 版本路径；
+    示例连接器配置改为指向启动器。
+  - `core.resolve_exe` 自动探测最新 `JLink_V*` 安装（Linux/macOS 探测 `/opt/SEGGER/JLink` 与
+    PATH），去掉写死的 `JLink_V988` 路径；`JLINK_EXE` 仍可作覆盖。
+  - `jlink_nohalt_sample` 输出目录默认改为系统临时目录下的 `jlink_commander_captures`
+    （原先相对 CWD 的 `captures`），避免依赖不可预期的 MCP 工作目录。
+
+### Notes
+- 对已在用 v1.0.0 的用户是**破坏性改名**：工具前缀变化，需在连接器管理页重新 Trust `Jlink-Commander`
+  （删除旧 `jlink-commander` 连接器）。
+
+---
+
 ## [jlink-commander/v1.0.0] - 2026-11-14
 
 ### Added

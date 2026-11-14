@@ -95,7 +95,9 @@ Commander 会话：`connect → g → Sleep → w4 → mem → g → q`（`build
 1. 换 `device`（如 `S32K144` → `STM32F4xx`）、`iface`（`si`）、`speed`；
 2. 提供新工程的 `.axf/.elf` 给 `jlink_dwarf_resolve` 重算地址；
 3. 显式 `addr_map` 模式完全不依赖 DWARF，可跨工具链直接用。
-本机 JLink 安装位：`C:/Program Files/SEGGER/JLink_V988/JLink.exe`（环境变量 `JLINK_EXE` 可覆盖）。
+本机 JLink 安装位：脚本会**自动探测最新** `C:/Program Files/SEGGER/JLink_V*/JLink.exe`
+（Linux/macOS 探测 `/opt/SEGGER/JLink`），无需写死版本号；特殊安装位用环境变量
+`JLINK_EXE` 覆盖即可。
 
 ---
 
