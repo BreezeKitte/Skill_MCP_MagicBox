@@ -5,7 +5,7 @@
 内写 RAM 做在线单变量 A/B、DWARF 解析全局地址。核心立场：**只用 Commander，禁用 J-Link GDB**
 （GDB 会 halt 内核、冻住 ISR 触发 PDB 序列错误伪影）。
 
-版本：`jlink-commander/v1.1.0` ｜ 路径：`jlink-commander/`
+版本：`jlink-commander/v1.2.0` ｜ 路径：`jlink-commander/`
 注册名（MCP）：**`Jlink-Commander`**（连接器里显示的名字，大写 C，与另一个 `jlink` node MCP 区分）
 
 ---
@@ -44,7 +44,7 @@ cp jlink-commander/examples/jlink-commander.mcp.json "$HOME/.workbuddy/Jlink-Com
 
 ---
 
-## 工具清单（8 个）
+## 工具清单（13 个）
 
 | 工具 | 碰真机？ | 作用 |
 |---|---|---|
@@ -53,9 +53,18 @@ cp jlink-commander/examples/jlink-commander.mcp.json "$HOME/.workbuddy/Jlink-Com
 | `jlink_dwarf_resolve` | 否（只读文件） | 解析 .axf/.elf，取全局基址 + 成员绝对地址（R6） |
 | `jlink_flash` | 是 | `connect → r → loadfile → r → g` 烧录 |
 | `jlink_nohalt_sample` | 是 | 稳态 NoHalt 采样，可选同会话 `writes` 做 A/B，输出 CSV/JSON |
-| `jlink_write_ram` | 是 | 同会话写 32-bit RAM 字并读回校验（B20） |
-| `jlink_read_memory` | 是 | 单次读内存，默认 NoHalt |
-| `jlink_exec` | 是 | 执行任意 Commander 命令列表（慎用） |
+| `jlink_write_ram` | 是 | 同会话写 RAM 字并读回校验（B20）；`width` 1/2/4/8 → w1/w2/w4/w8 |
+| `jlink_read_memory` | 是 | 单次读内存，默认 NoHalt；`width` 8/16/32 → mem/mem16/mem32 |
+| `jlink_save_memory` | 是 | `savebin` 把内存区间存成 .bin（离线分析 / Flash 备份） |
+| `jlink_verify_flash` | 是 | R6 读回校验：.bin→verifybin；.hex→解析后逐记录回读比对 |
+| `jlink_erase_flash` | 是 | `erase` 整片或区间擦除 |
+| `jlink_hw_status` | 仅 probe | `ShowHWStatus` 读 VTref/ITarget，台架前电源预检 |
+| `jlink_read_registers` | 是 | `regs` 读 CPU 寄存器（会隐式 halt，非实时场景用） |
+| `jlink_exec` | 是 | 执行任意 Commander 命令列表（RSetType/exec/SetBP 等高级用法） |
+
+> 内存读写宽度命令（`mem8/mem16/mem32`、`w1/w2/w8`）与 `savebin/verifybin/erase/
+> ShowHWStatus/regs` 的精确语法见 `references/jlink_reference.md` §6（均取自 JLink.exe V9.88
+> 内置 `?` 帮助，非凭记忆）。
 
 ---
 
