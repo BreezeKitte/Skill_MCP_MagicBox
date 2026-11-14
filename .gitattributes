@@ -1,0 +1,5 @@
+# 源码统一 LF（跨平台、可复现；避免 autocrlf 把 Python/JSON/MD 行尾改写导致字节差异）
+*.py text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.jlink text eol=lf
